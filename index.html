@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="no-referrer">
+  <title>今日の賄い</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f6f2; --card:#fff; --ink:#20352d; --muted:#63736c; --line:#dce5de; --green:#176447; --soft:#e9f4ed; --error:#a32222; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.65 system-ui,-apple-system,"Noto Sans JP",sans-serif; }
+    main { max-width:480px; margin:auto; padding:calc(32px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom)); }
+    .eyebrow { font-size:13px; color:var(--green); font-weight:700; letter-spacing:.16em; margin:0 0 14px; }
+    .date { display:inline-block; color:var(--muted); font-weight:600; margin-bottom:8px; }
+    h1 { font-size:30px; line-height:1.4; margin:0 0 14px; letter-spacing:.02em; }
+    .intro { margin:0 0 26px; color:var(--muted); }
+    .deadline { display:inline-block; padding:5px 12px; border-radius:99px; background:var(--soft); color:var(--green); font-size:13px; font-weight:700; }
+    #greeting { margin:28px 0 15px; font-weight:650; overflow-wrap:anywhere; }
+    .choices { display:grid; gap:12px; }
+    button { font:inherit; cursor:pointer; touch-action:manipulation; }
+    .choice { display:flex; align-items:center; gap:16px; width:100%; min-height:96px; padding:19px 18px; border:2px solid var(--line); border-radius:18px; background:var(--card); color:var(--ink); text-align:left; }
+    .choice[aria-pressed="true"] { border-color:var(--green); background:var(--soft); }
+    .choice .icon { font-size:28px; width:36px; text-align:center; }
+    .choice strong { font-size:21px; display:block; }
+    .choice small { display:block; font-size:13px; color:var(--muted); margin-top:3px; }
+    .choice .check { margin-left:auto; color:var(--green); font-size:22px; opacity:0; }
+    .choice[aria-pressed="true"] .check { opacity:1; }
+    button:focus-visible { outline:3px solid #db9c2e; outline-offset:4px; }
+    button:disabled { cursor:default; opacity:.55; }
+    #result { border-radius:16px; background:var(--soft); padding:18px; margin:22px 0 0; color:var(--green); }
+    #result:empty { display:none; }
+    #error { color:var(--error); margin-top:18px; overflow-wrap:anywhere; }
+    #retry { width:100%; padding:13px; margin-top:12px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--card); }
+    .privacy { font-size:12px; color:var(--muted); margin:27px 0 0; }
+    #loading { color:var(--muted); margin:26px 0; }
+    [hidden] { display:none !important; }
+    @media (prefers-color-scheme:dark) {
+      :root { --bg:#141d19; --card:#1e2b24; --ink:#edf5ef; --muted:#b0c1b6; --line:#3b5043; --green:#8ed8ad; --soft:#233d2e; --error:#ffb6b6; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">お店の食事アンケート</p>
+  <span class="date" id="date">今日の受付</span>
+  <h1>今日の賄い</h1>
+  <p class="intro">今日も一日、おつかれさまです。<br>ご希望の食事をお選びください。</p>
+  <span class="deadline">19:00 締め切り</span>
+  <p id="loading" role="status">受付状況を確認しています…</p>
+  <section id="form" hidden aria-label="賄いの回答">
+    <p id="greeting"></p>
+    <div class="choices" role="group" aria-label="食事を選択">
+      <button class="choice" data-choice="食べる" aria-pressed="false" disabled><span class="icon" aria-hidden="true">🍱</span><span><strong>食べる</strong><small>お弁当を1つ用意します</small></span><span class="check" aria-hidden="true">✓</span></button>
+      <button class="choice" data-choice="軽食" aria-pressed="false" disabled><span class="icon" aria-hidden="true">🍙</span><span><strong>軽食</strong><small>軽めのものを用意します</small></span><span class="check" aria-hidden="true">✓</span></button>
+      <button class="choice" data-choice="食べない" aria-pressed="false" disabled><span class="icon" aria-hidden="true">☕</span><span><strong>食べない</strong><small>今日は食事を希望しません</small></span><span class="check" aria-hidden="true">✓</span></button>
+    </div>
+  </section>
+  <div id="result" role="status" aria-live="polite"></div>
+  <div id="error" role="alert"></div>
+  <button id="retry" hidden>受付状況を再読み込み</button>
+  <p class="privacy">回答はグループには投稿されません。ご本人と、お店の管理者が確認できます。名前と回答は食事の準備に利用します。</p>
+  <noscript>JavaScriptを有効にして、LINEから開き直してください。</noscript>
+</main>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  // この2項目のみ書き換えてください。秘密キーやアクセストークンは置きません。
+  const CONFIG = {
+    liffId: '2012731127-CDq7AWJs',
+    apiUrl: 'ここにGASのexec_URL'
+  };
+  const $ = id => document.getElementById(id);
+  const buttons = [...document.querySelectorAll('[data-choice]')];
+  let current = null, busy = true, timer = null;
+  function enableChoices(enabled) { buttons.forEach(button => { button.disabled = !enabled; }); }
+  function showError(message) { $('error').textContent = message; $('retry').hidden = false; }
+  function render(state, saved) {
+    current = state;
+    $('date').textContent = state.dateLabel;
+    $('greeting').textContent = state.name + 'さん、今日はどうしますか';
+    $('form').hidden = false;
+    buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.choice === state.choice)));
+    $('result').textContent = state.closed ? '本日の受付は締め切りました' + (state.choice ? '。回答：' + state.choice : '') :
+      state.choice ? (saved ? '受け付けました' : '受付済みです') + '：' + state.choice + '。19:00までなら選び直せます' : '';
+    enableChoices(!busy && !state.closed);
+    clearTimeout(timer);
+    // 端末時計は使わず、サーバーが返す残り時間で表示を閉じる。最終判定は必ずGAS。
+    if (!state.closed) timer = setTimeout(() => {
+      if (current) render(Object.assign({}, current, { closed: true }), false);
+    }, Math.max(0, state.cutoff - state.serverNow));
+  }
+  async function api(action, choice) {
+    const token = liff.getIDToken();
+    if (!token) throw new Error('本人確認の有効期限が切れました。LINEから開き直してください。');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await fetch(CONFIG.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow', credentials: 'omit',
+        body: JSON.stringify({ action, idToken: token, choice, day: current && current.day }), signal: controller.signal
+      });
+      if (!response.ok) throw new Error('通信できませんでした。受付状況を再読み込みしてください。');
+      return await response.json();
+    } catch (error) {
+      throw new Error('通信を確認できませんでした。保存されている場合があります。「受付状況を再読み込み」で確認してください。');
+    } finally { clearTimeout(timeout); }
+  }
+  async function load() {
+    if (busy) return;
+    busy = true; enableChoices(false); $('loading').hidden = false; $('error').textContent = ''; $('retry').hidden = true;
+    try {
+      const state = await api('status');
+      if (!state.ok) throw new Error(state.message);
+      busy = false; render(state, false);
+    } catch (error) { showError(error.message); }
+    finally { busy = false; $('loading').hidden = true; }
+  }
+  buttons.forEach(button => button.addEventListener('click', async () => {
+    if (busy || !current || current.closed) return;
+    busy = true; enableChoices(false); $('error').textContent = ''; $('retry').hidden = true;
+    $('result').textContent = '回答を保存しています…';
+    try {
+      const state = await api('answer', button.dataset.choice);
+      if (!state.ok && !state.closed) throw new Error(state.message);
+      busy = false; render(state, state.ok);
+    } catch (error) {
+      $('result').textContent = '';
+      showError(error.message); // 不明な結果を成功扱いせず、状態取得まで再送を防ぐ。
+    } finally { busy = false; }
+  }));
+  $('retry').addEventListener('click', () => { if (current) load(); else location.reload(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && current && !busy) load(); });
+  (async () => {
+    try {
+      if (!/^\d+-[\w-]+$/.test(CONFIG.liffId) || !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(CONFIG.apiUrl)) throw new Error('受付の設定がまだ完了していません。お店の管理者にお知らせください。');
+      await liff.init({ liffId: CONFIG.liffId });
+      if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.origin + location.pathname }); return; }
+      busy = false; await load();
+    } catch (error) {
+      busy = false; $('loading').hidden = true;
+      showError('受付を開けませんでした。設定と通信環境を確認し、LINEから開き直してください。');
+    }
+  })();
+</script>
+</body>
+</html>
