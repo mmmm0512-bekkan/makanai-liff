@@ -17,6 +17,9 @@
     .intro { margin:0 0 26px; color:var(--muted); }
     .deadline { display:inline-block; padding:5px 12px; border-radius:99px; background:var(--soft); color:var(--green); font-size:13px; font-weight:700; }
     #greeting { margin:28px 0 15px; font-weight:650; overflow-wrap:anywhere; }
+    #menu-section { margin:0 0 22px; padding:16px; border-radius:16px; background:var(--soft); }
+    #menu-section h2 { font-size:16px; margin:0 0 8px; }
+    #menu { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
     .choices { display:grid; gap:12px; }
     button { font:inherit; cursor:pointer; touch-action:manipulation; }
     .choice { display:flex; align-items:center; gap:16px; width:100%; min-height:96px; padding:19px 18px; border:2px solid var(--line); border-radius:18px; background:var(--card); color:var(--ink); text-align:left; }
@@ -50,6 +53,10 @@
   <p id="loading" role="status">受付状況を確認しています…</p>
   <section id="form" hidden aria-label="賄いの回答">
     <p id="greeting"></p>
+    <section id="menu-section" hidden aria-labelledby="menu-title">
+      <h2 id="menu-title">今日の献立</h2>
+      <p id="menu"></p>
+    </section>
     <div class="choices" role="group" aria-label="食事を選択">
       <button class="choice" data-choice="食べる" aria-pressed="false" disabled><span class="icon" aria-hidden="true">🍱</span><span><strong>食べる</strong><small>お弁当を1つ用意します</small></span><span class="check" aria-hidden="true">✓</span></button>
       <button class="choice" data-choice="軽食" aria-pressed="false" disabled><span class="icon" aria-hidden="true">🍙</span><span><strong>軽食</strong><small>軽めのものを用意します</small></span><span class="check" aria-hidden="true">✓</span></button>
@@ -78,6 +85,8 @@
     current = state;
     $('date').textContent = state.dateLabel;
     $('greeting').textContent = state.name + 'さん、今日はどうしますか';
+    $('menu').textContent = state.menu || '';
+    $('menu-section').hidden = !state.menu;
     $('form').hidden = false;
     buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.choice === state.choice)));
     $('result').textContent = state.closed ? '本日の受付は締め切りました' + (state.choice ? '。回答：' + state.choice : '') :
